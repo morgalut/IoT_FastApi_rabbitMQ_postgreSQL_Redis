@@ -8,10 +8,11 @@ from RabbitMQ_consumer import start_consumer
 DB_CONFIG = {
     'dbname': 'iot_events',
     'user': 'admin',
-    'password': '1234',
+    'password': '1234',  # Ensure this matches your PostgreSQL user's password
     'host': 'localhost',
     'port': 5432,
 }
+
 
 # Flag to track if the consumer is running
 consumer_thread = None

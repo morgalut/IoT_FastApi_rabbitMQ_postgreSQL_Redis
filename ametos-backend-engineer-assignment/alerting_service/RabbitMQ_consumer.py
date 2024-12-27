@@ -1,8 +1,11 @@
+import logging
 import json
 import os
 import pika
 import psycopg2
-from psycopg2.extras import RealDictCursor
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # PostgreSQL connection parameters
 DB_CONFIG = {
@@ -12,6 +15,7 @@ DB_CONFIG = {
     'host': os.getenv('POSTGRES_HOST', 'localhost'),
     'port': os.getenv('POSTGRES_PORT', 5432),
 }
+
 
 def save_alert_to_db(alert):
     """
@@ -28,17 +32,14 @@ def save_alert_to_db(alert):
             (alert['type'], alert['message'], json.dumps(alert['details']))
         )
         conn.commit()
-        cursor.close()
-        conn.close()
-        print(f"Alert saved to database: {alert}")
+        logging.info(f"Alert saved to database: {alert}")
     except Exception as e:
-        print(f"Failed to save alert to database: {e}")
+        logging.error(f"Failed to save alert to database: {e}")
 
 def process_event(event):
     """
     Processes an incoming event and determines if it should generate an alert.
     """
-    alert = None
     try:
         if event.get('event_type') == 'access_attempt' and event.get('user_id') == 'unauthorized_user':
             alert = {
@@ -46,23 +47,12 @@ def process_event(event):
                 'message': 'Unauthorized access attempt detected!',
                 'details': event,
             }
-        elif event.get('event_type') == 'speed_violation' and event.get('speed_kmh', 0) > 90:
-            alert = {
-                'type': 'Speed Violation',
-                'message': 'Speed violation detected!',
-                'details': event,
-            }
-        elif (event.get('event_type') == 'motion_detected' and 
-              event.get('zone') == 'Restricted Area' and 
-              event.get('confidence', 0) > 0.9):
-            alert = {
-                'type': 'Intrusion Detection',
-                'message': 'Intrusion detected in a restricted area!',
-                'details': event,
-            }
+        # Add logging to show what event is being processed
+        logging.info(f"Processing event: {event}")
+        return alert
     except Exception as ex:
-        print(f"Error processing event: {ex}")
-    return alert
+        logging.error(f"Error processing event: {ex}")
+        return None
 
 def start_consumer():
     """
@@ -84,15 +74,15 @@ def start_consumer():
         def callback(ch, method, properties, body):
             try:
                 event = json.loads(body)
-                print(f"Received: {event}")
+                logging.info(f"Received: {event}")
                 alert = process_event(event)
                 if alert:
                     save_alert_to_db(alert)
             except Exception as ex:
-                print(f"Error processing message: {ex}")
+                logging.error(f"Error processing message: {ex}")
 
         channel.basic_consume(queue=queue_name, on_message_callback=callback, auto_ack=True)
-        print(f"Connected to RabbitMQ on {host}, waiting for messages...")
+        logging.info(f"Connected to RabbitMQ on {host}, waiting for messages...")
         channel.start_consuming()
     except Exception as e:
-        print(f"RabbitMQ connection error: {e}")
+        logging.error(f"RabbitMQ connection error: {e}")
