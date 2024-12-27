@@ -1,0 +1,18 @@
+// triggers_alert
+{
+    "device_id": "77:88:99:AA:BB:CC",
+    "timestamp": "2024-12-18T14:10:00Z",
+    "event_type": "motion_detected",
+    "zone": "Restricted Area",
+    "confidence": 0.95,
+    "photo_base64": "<base64-encoded-string-of-intrusion-photo>"
+}
+// does_not_trigger_alert
+{
+    "device_id": "77:88:99:AA:BB:CC",
+    "timestamp": "2024-12-18T14:20:00Z",
+    "event_type": "motion_detected",
+    "zone": "Open Area",
+    "confidence": 0.8,
+    "photo_base64": "<base64-encoded-string-of-non-intrusion-photo>"
+}

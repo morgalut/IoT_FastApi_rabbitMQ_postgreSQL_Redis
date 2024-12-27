@@ -1,0 +1,14 @@
+// triggers_alert
+{
+    "device_id": "AA:BB:CC:DD:EE:FF",
+    "timestamp": "2024-12-18T14:00:00Z",
+    "event_type": "access_attempt",
+    "user_id": "unauthorized_user"
+}
+// does_not_trigger_alert
+{
+    "device_id": "AA:BB:CC:DD:EE:FF",
+    "timestamp": "2024-12-18T14:05:00Z",
+    "event_type": "access_attempt",
+    "user_id": "authorized_user"
+}

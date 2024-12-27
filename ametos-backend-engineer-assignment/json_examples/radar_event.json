@@ -1,0 +1,16 @@
+// triggers_alert
+{
+    "device_id": "11:22:33:44:55:66",
+    "timestamp": "2024-12-18T14:05:00Z",
+    "event_type": "speed_violation",
+    "speed_kmh": 120,
+    "location": "Zone A"
+}
+// does_not_trigger_alert
+{
+    "device_id": "11:22:33:44:55:66",
+    "timestamp": "2024-12-18T14:10:00Z",
+    "event_type": "speed_violation",
+    "speed_kmh": 70,
+    "location": "Zone A"
+}
