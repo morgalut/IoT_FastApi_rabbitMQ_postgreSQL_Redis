@@ -1,3 +1,7 @@
+"""
+Module for consuming RabbitMQ messages and processing events to trigger alerts.
+"""
+
 import logging
 import json
 import os
@@ -13,7 +17,7 @@ DB_CONFIG = {
     'user': os.getenv('POSTGRES_USER', 'admin'),
     'password': os.getenv('POSTGRES_PASSWORD', '1234'),
     'host': os.getenv('POSTGRES_HOST', 'localhost'),
-    'port': os.getenv('POSTGRES_PORT', 5432),
+    'port': int(os.getenv('POSTGRES_PORT', '5432')),  # Ensure the port is an integer
 }
 
 
@@ -32,14 +36,16 @@ def save_alert_to_db(alert):
             (alert['type'], alert['message'], json.dumps(alert['details']))
         )
         conn.commit()
-        logging.info(f"Alert saved to database: {alert}")
+        logging.info("Alert saved to database: %s", alert)
     except Exception as e:
-        logging.error(f"Failed to save alert to database: {e}")
+        logging.error("Failed to save alert to database: %s", e)
+
 
 def process_event(event):
     """
     Processes an incoming event and determines if it should generate an alert.
     """
+    alert = None  # Initialize alert to None to avoid use-before-assignment issues
     try:
         if event.get('event_type') == 'access_attempt' and event.get('user_id') == 'unauthorized_user':
             alert = {
@@ -47,12 +53,12 @@ def process_event(event):
                 'message': 'Unauthorized access attempt detected!',
                 'details': event,
             }
-        # Add logging to show what event is being processed
-        logging.info(f"Processing event: {event}")
+        logging.info("Processing event: %s", event)  # Use lazy % formatting
         return alert
     except Exception as ex:
-        logging.error(f"Error processing event: {ex}")
+        logging.error("Error processing event: %s", ex)
         return None
+
 
 def start_consumer():
     """
@@ -61,7 +67,7 @@ def start_consumer():
     host = os.getenv('RABBITMQ_HOST', 'localhost')
     queue_name = os.getenv('RABBITMQ_QUEUE', 'iot_events')
     credentials = pika.PlainCredentials(
-        os.getenv('RABBITMQ_USER', 'guest'), 
+        os.getenv('RABBITMQ_USER', 'guest'),
         os.getenv('RABBITMQ_PASSWORD', 'guest')
     )
     parameters = pika.ConnectionParameters(host=host, credentials=credentials)
@@ -72,17 +78,21 @@ def start_consumer():
         channel.queue_declare(queue=queue_name, durable=True)
 
         def callback(ch, method, properties, body):
+            """
+            Callback function for handling messages.
+            """
             try:
                 event = json.loads(body)
-                logging.info(f"Received: {event}")
+                logging.info("Received: %s", event)
                 alert = process_event(event)
                 if alert:
                     save_alert_to_db(alert)
             except Exception as ex:
-                logging.error(f"Error processing message: {ex}")
+                logging.error("Error processing message: %s", ex)
 
         channel.basic_consume(queue=queue_name, on_message_callback=callback, auto_ack=True)
-        logging.info(f"Connected to RabbitMQ on {host}, waiting for messages...")
+        logging.info("Connected to RabbitMQ on %s, waiting for messages...", host)
         channel.start_consuming()
     except Exception as e:
-        logging.error(f"RabbitMQ connection error: {e}")
+        logging.error("RabbitMQ connection error: %s", e)
+

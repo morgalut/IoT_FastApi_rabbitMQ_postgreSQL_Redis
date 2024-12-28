@@ -1,7 +1,11 @@
+"""
+FastAPI application for IoT event alerting and RabbitMQ message processing.
+"""
+
 import os
-from fastapi import FastAPI, BackgroundTasks, Query
-from contextlib import asynccontextmanager
 import threading
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, BackgroundTasks, Query
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from RabbitMQ_consumer import start_consumer
@@ -9,11 +13,10 @@ from RabbitMQ_consumer import start_consumer
 DB_CONFIG = {
     'dbname': os.getenv('POSTGRES_DB', 'iot_events'),
     'user': os.getenv('POSTGRES_USER', 'admin'),
-    'password': os.getenv('POSTGRES_PASSWORD', 'new_password'),  # Update this line
+    'password': os.getenv('POSTGRES_PASSWORD', 'new_password'),
     'host': os.getenv('POSTGRES_HOST', 'localhost'),
-    'port': os.getenv('POSTGRES_PORT', 5432),
+    'port': int(os.getenv('POSTGRES_PORT', '5432')),
 }
-
 
 try:
     conn = psycopg2.connect(**DB_CONFIG)
@@ -23,10 +26,10 @@ except Exception as e:
     print(f"Error: {e}")
 
 # Flag to track if the consumer is running
-consumer_thread = None
+CONSUMER_THREAD = None
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_):
     """
     Lifespan context manager for managing startup and shutdown events.
     """
@@ -39,10 +42,10 @@ def run_consumer():
     """
     Wrapper function to start the RabbitMQ consumer in a thread.
     """
-    global consumer_thread
-    if not consumer_thread or not consumer_thread.is_alive():
-        consumer_thread = threading.Thread(target=start_consumer, daemon=True)
-        consumer_thread.start()
+    global CONSUMER_THREAD
+    if not CONSUMER_THREAD or not CONSUMER_THREAD.is_alive():
+        CONSUMER_THREAD = threading.Thread(target=start_consumer, daemon=True)
+        CONSUMER_THREAD.start()
 
 @app.get("/")
 def root():
@@ -58,7 +61,6 @@ def start_consumer_endpoint(background_tasks: BackgroundTasks):
     """
     background_tasks.add_task(run_consumer)
     return {"message": "RabbitMQ consumer is starting in the background."}
-
 
 @app.get("/alerts")
 def get_alerts(event_type: str = Query(None), limit: int = Query(10)):
@@ -91,4 +93,3 @@ def get_alerts(event_type: str = Query(None), limit: int = Query(10)):
             cursor.close()
         if 'conn' in locals() and conn:
             conn.close()
-

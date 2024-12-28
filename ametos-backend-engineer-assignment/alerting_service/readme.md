@@ -1,5 +1,7 @@
 ## The program lecture
-
+```
+pip install -r Requirements.txt
+```
 
 ## Run python FastApi
 ```
