@@ -24,7 +24,8 @@ docker-compose exec postgres ping redis
 ## Check Redis
 ```docker run -it --network=container:configs-redis-1 redis redis-cli -h redis```
 ```PING```
-```SET mykey "Hello"
+```
+SET mykey "Hello"
 GET mykey
 ```
 ---

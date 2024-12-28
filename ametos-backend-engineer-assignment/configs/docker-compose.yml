@@ -7,11 +7,11 @@ services:
       POSTGRES_PASSWORD: new_password
       POSTGRES_DB: iot_events
     ports:
-      - "5432:5432"  # Existing port mapping
-      - "5433:5432"  # New port mapping to access PostgreSQL on a different port
+      - "5432:5432"
+      - "5433:5432"
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
-
+      - ./configs/database_schema.sql:/docker-entrypoint-initdb.d/database_schema.sql
 
   redis:
     image: redis:6.0

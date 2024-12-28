@@ -7,9 +7,10 @@ CREATE DATABASE iot_events;
 -- Create Tables
 CREATE TABLE sensors (
     id SERIAL PRIMARY KEY,
-    device_id VARCHAR(255) UNIQUE NOT NULL,
-    device_type VARCHAR(255) NOT NULL
+    device_id VARCHAR(128) UNIQUE NOT NULL,
+    device_type VARCHAR(50) NOT NULL
 );
+
 
 CREATE TABLE events (
     id SERIAL PRIMARY KEY,

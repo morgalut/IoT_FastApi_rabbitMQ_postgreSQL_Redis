@@ -8,7 +8,8 @@ import logging
 from dependencies import get_redis, get_db
 from device_management import DeviceManager
 from routers import router
-from models import Event, EventModel
+from models import Event, EventModel, Sensor
+from sqlalchemy.orm import joinedload
 
 # Load environment variables
 load_dotenv()
@@ -86,15 +87,8 @@ def handle_get_events(db: Session, from_timestamp: Optional[str], to_timestamp: 
                       event_type: Optional[str], device_type: Optional[str]):
     """
     Retrieve events from the database based on filters.
-
-    Args:
-        db (Session): Database session.
-        from_timestamp (Optional[str]): Start time filter.
-        to_timestamp (Optional[str]): End time filter.
-        event_type (Optional[str]): Filter by event type.
-        device_type (Optional[str]): Filter by device type.
     """
-    query = db.query(Event)
+    query = db.query(Event).options(joinedload(Event.sensor))
     if from_timestamp:
         query = query.filter(Event.timestamp >= from_timestamp)
     if to_timestamp:
@@ -102,9 +96,11 @@ def handle_get_events(db: Session, from_timestamp: Optional[str], to_timestamp: 
     if event_type:
         query = query.filter(Event.event_type == event_type)
     if device_type:
-        query = query.filter(Event.device_type == device_type)
+        # Now filtering through the related sensor's device_type
+        query = query.filter(Sensor.device_type == device_type)
     events = query.all()
     return events
+
 
 def register_device_logic(device_id: str, device_type: str, redis_client):
     """
