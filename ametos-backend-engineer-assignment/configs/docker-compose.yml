@@ -4,12 +4,14 @@ services:
     image: postgres:17
     environment:
       POSTGRES_USER: admin
-      POSTGRES_PASSWORD: new_password  # Changed from '1234' to 'new_password'
+      POSTGRES_PASSWORD: new_password
       POSTGRES_DB: iot_events
     ports:
-      - "5432:5432"
+      - "5432:5432"  # Existing port mapping
+      - "5433:5432"  # New port mapping to access PostgreSQL on a different port
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
+
 
   redis:
     image: redis:6.0

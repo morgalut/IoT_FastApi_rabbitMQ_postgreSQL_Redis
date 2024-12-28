@@ -14,8 +14,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # PostgreSQL connection parameters
 DB_CONFIG = {
     'dbname': os.getenv('POSTGRES_DB', 'iot_events'),
-    'user': os.getenv('POSTGRES_USER', 'admin'),
-    'password': os.getenv('POSTGRES_PASSWORD', '1234'),
+    'user': os.getenv('POSTGRES_USER', 'new_admin'),
+    'password': os.getenv('POSTGRES_PASSWORD', 'newer_password'),
     'host': os.getenv('POSTGRES_HOST', 'localhost'),
     'port': int(os.getenv('POSTGRES_PORT', '5432')),  # Ensure the port is an integer
 }
