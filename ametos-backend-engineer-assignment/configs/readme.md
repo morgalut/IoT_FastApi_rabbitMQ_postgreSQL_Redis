@@ -3,6 +3,7 @@
 
 ## Build docker 
 docker-compose up --build -d
+docker-compose up -d
 
 ##  Stop compose 
 docker-compose down -v
