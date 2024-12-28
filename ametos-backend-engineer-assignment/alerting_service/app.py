@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, BackgroundTasks, Query
 from contextlib import asynccontextmanager
 import threading
@@ -6,13 +7,20 @@ from psycopg2.extras import RealDictCursor
 from RabbitMQ_consumer import start_consumer
 
 DB_CONFIG = {
-    'dbname': 'iot_events',
-    'user': 'admin',
-    'password': '1234',  # Ensure this matches your PostgreSQL user's password
-    'host': 'localhost',
-    'port': 5432,
+    'dbname': os.getenv('POSTGRES_DB', 'iot_events'),
+    'user': os.getenv('POSTGRES_USER', 'admin'),
+    'password': os.getenv('POSTGRES_PASSWORD', 'new_password'),  # Update this line
+    'host': os.getenv('POSTGRES_HOST', 'localhost'),
+    'port': os.getenv('POSTGRES_PORT', 5432),
 }
 
+
+try:
+    conn = psycopg2.connect(**DB_CONFIG)
+    print("Connection successful!")
+    conn.close()
+except Exception as e:
+    print(f"Error: {e}")
 
 # Flag to track if the consumer is running
 consumer_thread = None
@@ -51,6 +59,7 @@ def start_consumer_endpoint(background_tasks: BackgroundTasks):
     background_tasks.add_task(run_consumer)
     return {"message": "RabbitMQ consumer is starting in the background."}
 
+
 @app.get("/alerts")
 def get_alerts(event_type: str = Query(None), limit: int = Query(10)):
     """
@@ -72,8 +81,14 @@ def get_alerts(event_type: str = Query(None), limit: int = Query(10)):
 
         cursor.execute(query, params)
         alerts = cursor.fetchall()
-        cursor.close()
-        conn.close()
         return {"alerts": alerts}
+    except psycopg2.Error as db_error:
+        return {"error": f"Database error: {db_error}"}
     except Exception as e:
         return {"error": str(e)}
+    finally:
+        if 'cursor' in locals() and cursor:
+            cursor.close()
+        if 'conn' in locals() and conn:
+            conn.close()
+

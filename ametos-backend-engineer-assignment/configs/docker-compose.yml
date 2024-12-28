@@ -1,11 +1,10 @@
 version: '3.8'
-
 services:
   postgres:
     image: postgres:17
     environment:
       POSTGRES_USER: admin
-      POSTGRES_PASSWORD: 1234
+      POSTGRES_PASSWORD: new_password  # Changed from '1234' to 'new_password'
       POSTGRES_DB: iot_events
     ports:
       - "5432:5432"
