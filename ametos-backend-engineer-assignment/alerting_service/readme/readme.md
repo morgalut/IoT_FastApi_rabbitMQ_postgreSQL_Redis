@@ -1,4 +1,4 @@
-## Run 
+## Run python FastApi
 ```
 uvicorn app:app --reload
 ```
@@ -41,6 +41,12 @@ SELECT pg_reload_conf();
 ## Check alerts in curl
 ```
 curl "http://localhost:8000/alerts?event_type=Unauthorized%20Access&limit=5"
+```
+
+
+## If you have this error go link 
+```
+{"error":"Database error: column \"type\" does not exist\nLINE 1: SELECT * FROM alerts WHERE type = 'Unauthorized Access' ORDE...\n"}
 ```
 # If you Have Error 
 https://docs.google.com/document/d/16PatyEYmDUyZmu0ZGR-velZ343uX4Kclplq2ROpgboQ/edit?usp=sharing
