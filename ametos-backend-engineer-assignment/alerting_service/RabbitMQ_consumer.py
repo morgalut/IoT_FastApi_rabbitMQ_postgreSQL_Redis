@@ -1,12 +1,16 @@
 """
-Module for consuming RabbitMQ messages and processing events to trigger alerts.
+This module handles the consumption of messages from RabbitMQ and processing those messages to generate and store alerts.
 """
 
 import logging
 import json
 import os
+import threading
+import signal
+import time
 import pika
 import psycopg2
+from alert_rules import process_event
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -17,82 +21,80 @@ DB_CONFIG = {
     'user': os.getenv('POSTGRES_USER', 'new_admin'),
     'password': os.getenv('POSTGRES_PASSWORD', 'newer_password'),
     'host': os.getenv('POSTGRES_HOST', 'localhost'),
-    'port': int(os.getenv('POSTGRES_PORT', '5432')),  # Ensure the port is an integer
+    'port': int(os.getenv('POSTGRES_PORT', '5432'))
 }
 
+RABBITMQ_USER = os.getenv('RABBITMQ_USER', 'new_user')
+RABBITMQ_PASSWORD = os.getenv('RABBITMQ_PASSWORD', 'new_password')
+RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'localhost')
+RABBITMQ_PORT = int(os.getenv('RABBITMQ_PORT', '5672'))
+QUEUE_NAME = 'iot_events'
+
+# Signal Handling
+stop_thread = threading.Event()
+
+def signal_handler(signum, _frame):
+    """Handles incoming signals by logging and setting a stop event."""
+    logging.info("Signal received, shutting down...")
+    stop_thread.set()
+
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
+def connect_with_retry(max_retries=5):
+    """Attempt to connect to RabbitMQ with a retry mechanism."""
+    for attempt in range(max_retries):
+        if stop_thread.is_set():
+            logging.info("Shutdown signal received, stopping connection attempts.")
+            return None
+        try:
+            credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASSWORD)
+            parameters = pika.ConnectionParameters(host=RABBITMQ_HOST, port=RABBITMQ_PORT, credentials=credentials)
+            return pika.BlockingConnection(parameters)
+        except pika.exceptions.AMQPConnectionError as e:
+            wait_time = min(2 ** attempt, 30)
+            logging.error("Connection attempt %d failed. Retrying in %d seconds...", attempt + 1, wait_time)
+            time.sleep(wait_time)
+    raise Exception("Failed to connect to RabbitMQ after several attempts.")
 
 def save_alert_to_db(alert):
-    """
-    Save an alert to the PostgreSQL database.
-    """
+    """Save an alert to the PostgreSQL database."""
+    logging.info("Attempting to save alert: %s", alert['message'])
     try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO alerts (type, message, details)
-            VALUES (%s, %s, %s)
-            """,
-            (alert['type'], alert['message'], json.dumps(alert['details']))
-        )
-        conn.commit()
-        logging.info("Alert saved to database: %s", alert)
-    except Exception as e:
-        logging.error("Failed to save alert to database: %s", e)
-
-
-def process_event(event):
-    """
-    Processes an incoming event and determines if it should generate an alert.
-    """
-    alert = None  # Initialize alert to None to avoid use-before-assignment issues
-    try:
-        if event.get('event_type') == 'access_attempt' and event.get('user_id') == 'unauthorized_user':
-            alert = {
-                'type': 'Unauthorized Access',
-                'message': 'Unauthorized access attempt detected!',
-                'details': event,
-            }
-        logging.info("Processing event: %s", event)  # Use lazy % formatting
-        return alert
-    except Exception as ex:
-        logging.error("Error processing event: %s", ex)
-        return None
-
+        with psycopg2.connect(**DB_CONFIG) as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO alerts (type, message, details)
+                    VALUES (%s, %s, %s)
+                    """,
+                    (alert['type'], alert['message'], json.dumps(alert['details']))
+                )
+                conn.commit()
+                logging.info("Alert saved successfully.")
+    except psycopg2.Error as e:
+        logging.error("Failed to save alert to database: %s", str(e))
 
 def start_consumer():
-    """
-    Starts the RabbitMQ consumer to listen for messages and process events.
-    """
-    host = os.getenv('RABBITMQ_HOST', 'localhost')
-    queue_name = os.getenv('RABBITMQ_QUEUE', 'iot_events')
-    credentials = pika.PlainCredentials(
-        os.getenv('RABBITMQ_USER', 'guest'),
-        os.getenv('RABBITMQ_PASSWORD', 'guest')
-    )
-    parameters = pika.ConnectionParameters(host=host, credentials=credentials)
+    """Start the RabbitMQ consumer."""
+    connection = connect_with_retry()
+    if connection is None:
+        return
+    channel = connection.channel()
+    channel.queue_declare(queue=QUEUE_NAME, durable=True)
+    channel.basic_qos(prefetch_count=1)
 
+def callback(ch, method, _properties, body):
+    """Process incoming messages and generate alerts."""
     try:
-        connection = pika.BlockingConnection(parameters)
-        channel = connection.channel()
-        channel.queue_declare(queue=queue_name, durable=True)
-
-        def callback(ch, method, properties, body):
-            """
-            Callback function for handling messages.
-            """
-            try:
-                event = json.loads(body)
-                logging.info("Received: %s", event)
-                alert = process_event(event)
-                if alert:
-                    save_alert_to_db(alert)
-            except Exception as ex:
-                logging.error("Error processing message: %s", ex)
-
-        channel.basic_consume(queue=queue_name, on_message_callback=callback, auto_ack=True)
-        logging.info("Connected to RabbitMQ on %s, waiting for messages...", host)
-        channel.start_consuming()
-    except Exception as e:
-        logging.error("RabbitMQ connection error: %s", e)
-
+        event = json.loads(body)
+        logging.info("Received event: %s", event)
+        alert = process_event(event)
+        if alert:
+            logging.info("Generated alert: %s", alert)
+            save_alert_to_db(alert)
+        else:
+            logging.info("No alert generated for event: %s", event)
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+    except json.JSONDecodeError as e:
+        logging.error("Failed to process message: %s", str(e))

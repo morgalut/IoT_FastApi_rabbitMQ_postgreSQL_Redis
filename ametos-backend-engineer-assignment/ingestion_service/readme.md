@@ -1,57 +1,137 @@
+
+
+# Ingestion Service Setup Guide
+
+This guide provides instructions for setting up and operating the ingestion service for the Ametos backend engineer assignment. It includes steps for configuring environment variables, activating the service, and verifying operations through various `curl` commands.
+
+## Prerequisites
+
+Ensure you have Docker installed for managing containers and Python for running the service.
+
+## Environment Setup
+
+### Creating an Environment Variables File
+
+1. **Navigate to the configs directory**:
+   ```
+   cd ametos-backend-engineer-assignment\configs\
+   ```
+
+2. **Create a `.env` file**:
+   Create a `.env` file in the directory with the following content. This file contains necessary configuration settings for the databases and services used by the ingestion service.
+   ```plaintext
+   POSTGRES_PORT=5432
+   POSTGRES_PASSWORD=newer_password
+   POSTGRES_USER=new_admin
+   POSTGRES_DB=iot_events
+   RABBITMQ_USER=user
+   RABBITMQ_PASSWORD=guest
+   REDIS_HOST=redis
+   REDIS_PORT=6379
+   RABBITMQ_HOST=rabbitmq
+   RABBITMQ_PORT=5672
+   ```
+
+## Service Activation
+
+### Start the Ingestion Service
+
+Run the service using Uvicorn with live reload enabled to apply code changes without restarting the service:
+
+```
 uvicorn app:app --reload
-
-
-# Need create .env 
-You need to create a file inside the "ametos-backend-engineer-assignment\configs\.env"
-with the following details so that everything is correct
-```
-POSTGRES_PORT=5432
-POSTGRES_PASSWORD=newer_password
-POSTGRES_USER=new_admin
-POSTGRES_DB=iot_events
-RABBITMQ_USER=user
-RABBITMQ_PASSWORD=guest
-REDIS_HOST=redis
-REDIS_PORT=6379
-RABBITMQ_HOST=rabbitmq
-RABBITMQ_PORT=5672
 ```
 
-## Check curl register_device
-``` curl -X POST "http://127.0.0.1:8000/register_device" -H "Content-Type: application/json" -d "{\"device_id\": \"AA:BB:CC:DD:EE:FF\", \"device_type\": \"Security Camera\"}" ```
+## Database Setup
 
-``` curl -X POST "http://127.0.0.1:8000/register_device" -H "Content-Type: application/json" -d "{\"device_id\": \"77:88:99:AA:BB:CC\", \"device_type\": \"Motion Sensor\"}" ```
+### Initialize PostgreSQL Database
 
-``` curl -X POST "http://127.0.0.1:8000/register_device" -H "Content-Type: application/json" -d "{\"device_id\": \"11:22:33:44:55:66\", \"device_type\": \"Radar\"}" ```
+Ensure that the PostgreSQL database is set up and configured correctly:
 
-## Check curl events
+1. **Access the PostgreSQL instance**:
+   ```bash
+   docker exec -it configs-postgres-1 psql -U admin -d iot_events
+   ```
 
-``` curl -X POST "http://127.0.0.1:8000/events" -H "Content-Type: application/json" -d "{\"device_id\": \"AA:BB:CC:DD:EE:FF\", \"timestamp\": \"2024-12-18T14:00:00Z\", \"event_type\": \"access_attempt\", \"event_data\": {\"user_id\": \"unauthorized_user\"}}" ```
+2. **Create necessary tables**:
+   Execute the following SQL commands to create the database schema required for the ingestion service:
+   ```sql
+   CREATE DATABASE iot_events;
 
-``` curl -X POST "http://127.0.0.1:8000/events" -H "Content-Type: application/json" -d "{\"device_id\": \"AA:BB:CC:DD:EE:FF\", \"timestamp\": \"2024-12-18T14:05:00Z\", \"event_type\": \"access_attempt\", \"event_data\": {\"user_id\": \"authorized_user\"}}" ```
+   CREATE TABLE sensors (
+       id SERIAL PRIMARY KEY,
+       device_id VARCHAR(128) UNIQUE NOT NULL,
+       device_type VARCHAR(50) NOT NULL
+   );
 
-## Check with img curl commnd 
+   CREATE TABLE events (
+       id SERIAL PRIMARY KEY,
+       device_id VARCHAR(255) NOT NULL,
+       event_type VARCHAR(255) NOT NULL,
+       event_data JSONB NOT NULL,
+       timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+       FOREIGN KEY (device_id) REFERENCES sensors(device_id) ON DELETE CASCADE
+   );
 
-```curl -X POST "http://127.0.0.1:8000/events" -H "Content-Type: application/json" -d "{\"device_id\": \"77:88:99:AA:BB:CC\", \"timestamp\": \"2024-12-18T14:10:00Z\", \"event_type\": \"motion_detected\", \"event_data\": {\"zone\": \"Restricted Area\", \"confidence\": 0.95, \"photo_base64\": \"/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDACgcHiMeGSgjISMtKygwPGRBPDc3PHtYXUlkkYCZlo+AjIqgtObDoKrarYqMyP/L2u71////m8H////6/+b9//j/2wBDASstLTw1PHZBQXb4pYyl+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj/wAARCALQBQADASIAAhEBAxEB/8QAGgABAQEBAQEBAAAAAAAAAAAAAAECAwQFBv/EAD0QAAICAQMCBQMCBQQBAwQCAwABAhEhAxIxQVEEImFxgRMykUKhBSMzUrEUYnLB0YLh8CQ0Q5IlovFT8v/EABgBAQEBAQEAAAAAAAAAAAAAAAABAgME/8QAJxEBAQACAgICAgICAwEAAAAAAAECEQMxITISQVFhEyIzcSNCkVL/2gAMAwEAAhEDEQA/APAAU6MABQCQBQBCgCMBgihCvkgFfJCvkUBHyOpSAKBXyAI8EK/+iAVcHVcI5Lg6rhAAUEVCgAAAQQAoEKAQAAAC5YC5YAMpl8gQ0ZNBQoAGdX+mznp/cvc6av8ATkY0/uj7iI5y++Xuywi5SUV1E/6kvc7eFSTc5ccI6zpl9DwfhVLSctVLb0j/AOT5kmpeIe3ht1+GfS8T4qGj4JacZfzJRXwfM1GktOUPX5Mq67L0owlzSR52mnT5R2Ws5xm4xSlHKRmS+pprUjyuRKU8P/Ufseg82h/V+D1Gc+1xQFBhQAAAefXcvqUn0Oe2XV59+TUxNvWOhnR/ox9jZOhiXDMSXmfsjpLCfsYbTk/ZAc9RVF+//RdLMIjU+2Xv/wBDR/pr3KhS+n/6TlPGpI7/AKPhnCf9SQHdpbuCNc46f+Sv7iOSznp/5Axp5b9jRjTai89v+zVqqvKAzJ+b8DuR9SgJcGDb4MAAClApCoCgllsgFsgA0aTMFRR0TNKRyWDVkHVSLv59+TjYsqO0p3ZYa0oT\"}}" ```
+   CREATE TABLE alerts (
+       id SERIAL PRIMARY KEY,
+       type VARCHAR(255),
+       message TEXT,
+       details JSONB,
+       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+   );
+   ```
 
-``` curl -X POST "http://127.0.0.1:8000/events" -H "Content-Type: application/json" -d "{\"device_id\": \"77:88:99:AA:BB:CC\", \"timestamp\": \"2024-12-18T14:10:00Z\", \"event_type\": \"motion_detected\", \"event_data\": {\"zone\": \"Restricted Area\", \"confidence\": 0.95, \"photo_base64\": \"/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDACgcHiMeGSgjISMtKygwPGRBPDc3PHtYXUlkkYCZlo+AjIqgtObDoKrarYqMyP/L2u71////m8H////6/+b9//j/2wBDASstLTw1PHZBQXb4pYyl+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj/wAARCAIgB4ADASIAAhEBAxEB/8QAGgAAAwEBAQEAAAAAAAAAAAAAAAECAwQFBv/EAEYQAAICAQMDAgQEBAMECQQBBQECABEDEiExBEFRImETMnGBBUKRoRQjUrFiwdEVM3LhNDVDRXOCwvDxJFOEkgZEVKLig//EABcBAQEBAQAAAAAAAAAAAAAAAAABAgP/xAAgEQEBAQADAQEBAQADAAAAAAAAARECITESQVFhAxNx/9oADAMBAAIRAxEAPwD2YSE3G/MagWRAqEQAB2ju4BCLVIJOriA8jhAGbiWNxObqVVsRBUn6GXhYfCSrFiEbQi38xwoiIB5EAQSaMcDk6lSrqaZ9W2ntDB/JynEqnSd9vyzqYEqQNjIKhE9K2RAGyhWqiT7SywCaroTlHTvrL6hq9x2mzMfhkaLIHBgcWTK2TICCQtczZchTC1EajuDUwGQOArnV6uK3mmNEZjjALdyR2hHnZyhya19LH5lPYzK51dcAH0utODt7jtOPeUPiUmwJPeSBewlXSfaB3fhILZ2bsFnrTx/w/OMOpaJuuJ7ANgGKohCEgIRE0Cf7TmPWIHG5A8EQOqEQNgHzHAInICm4FlXkgTiz9SWJGMX/AJyW4M+qyY6NH1dqnnmjvdA+01yE3TE3MSaU8+ZlFBQG2P3uLOqrpKj0ng95GqjcbsNOkG95RHeUORvUkX4lDapVNsjA7HY+0lVDPV1BmJW2IlooUDkMfPiRAXAtV3FeZnZUgN2mqkoTjBbc70OYihtq3XvARYsTpHI23muPK2um\"}}" ```
+## Device Registration
 
-## Show all Get curl command 
+Use the following `curl` commands to register devices within the system:
 
-``` curl -X GET "http://127.0.0.1:8000/events"```
+- **Security Camera**:
+  ```bash
+  curl -X POST "http://127.0.0.1:8000/register_device" -H "Content-Type: application/json" -d "{\"device_id\": \"AA:BB:CC:DD:EE:FF\", \"device_type\": \"Security Camera\"}"
+  ```
 
-```curl -X GET "http://127.0.0.1:8000/events?from_timestamp=2024-12-18T14:00:00Z" ```
+[View Example Security Camera Registration](Img/1.png)
 
-```curl -X GET "http://127.0.0.1:8000/events?to_timestamp=2024-12-18T15:00:00Z" ```
+- **Motion Sensor** and **Radar**:
+  ```bash
+  curl -X POST "http://127.0.0.1:8000/register_device" -H "Content-Type: application/json" -d "{\"device_id\": \"77:88:99:AA:BB:CC\", \"device_type\": \"Motion Sensor\"}"
+  curl -X POST "http://127.0.0.1:8000/register_device" -H "Content-Type: application/json" -d "{\"device_id\": \"11:22:33:44:55:66\", \"device_type\": \"Radar\"}"
+  ```
 
-``` curl -X GET "http://127.0.0.1:8000/events?event_type=motion_detected" ```
+## Posting and Retrieving Events
 
-``` curl -X GET "http://127.0.0.1:8000/events?device_type=Motion%20Sensor" ``` 
+### Post Events
 
----
+Post event data using `curl`:
 
-![alt text](Img/image.png)
+```bash
+curl -X POST "http://127.0.0.1:8000/events" -H "Content-Type: application/json" -d "{\"device_id\": \"AA:BB:CC:DD:EE:FF\", \"timestamp\": \"2024-12-18T14:00:00Z\", \"event_type\": \"access_attempt\", \"event_data\": {\"user_id\": \"unauthorized_user\"}}"
+```
 
----
+### Retrieve Events
 
-![alt text](Img/image-1.png)
+Retrieve posted events with various filters:
+
+- **Get All Events**:
+  ```bash
+  curl -X GET "http://127.0.0.1:8000/events"
+  ```
+
+- **Filter by Timestamp and Event Type**:
+  ```bash
+  curl -X GET "http://127.0.0.1:8000/events?from_timestamp=2024-12-18T14:00:00Z&to_timestamp=2024-12-18T15:00:00Z"
+  curl -X GET "http://127.0.0.1:8000/events?event_type=motion_detected"
+  curl -X GET "http://127.0.0.1:8000/events?device_type=Motion%20Sensor"
+  ```
+
+[View Example of Event Retrieval](Img/e.png)
+
+### Example of Posting an Event with an Image in Base64
+
+```bash
+curl -X POST "http://127.0.0.1:8000/events" -H "Content-Type: application/json" -d "{\"device_id\": \"77:88:99:AA:BB:CC\", \"timestamp\": \"2024-12-18T14:10:00Z\", \"event_type\": \"motion_detected\", \"event_data\": {\"zone\": \"Restricted Area\", \"confidence\": 0.95, \"photo_base64\": \"/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDACgcHiMeGSgjISMtKygwPGRBPDc3PHtYXUlkkYCZlo+AjIqgtObDoKrarYqMyP/L2u71////m8H////6/+b9//j/2wBDASstLTw1PHZBQXb4pYyl+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj4+Pj/wAARCAIgB4ADASIAAhEBAxEB/8QAGgAAAwEBAQEAAAAAAAAAAAAAAAECAwQFBv/EAEYQAAICAQMDAgQEBAMECQQBBQECABEDEiExBEFRImETMnGBBUKRoRQjUrFiwdEVM3LhNDVDRXOCwvDxJFOEkgZEVKLig//EABcBAQEBAQAAAAAAAAAAAAAAAAABAgP/xAAgEQEBAQADAQEBAQADAAAAAAAAARECITESQVFhAxNx/9oADAMBAAIRAxEAPwD2YSE3G/MagWRAqEQAB2ju4BCLVIJOriA8jhAGbiWNxObqVVsRBUn6GXhYfCSrFiEbQi38xwoiIB5EAQSaMcDk6lSrqaZ9W2ntDB/JynEqnSd9vyzqYEqQNjIKhE9K2RAGyhWqiT7SywCaroTlHTvrL6hq9x2mzMfhkaLIHBgcWTK2TICCQtczZchTC1EajuDUwGQOArnV6uK3mmNEZjjALdyR2hHnZyhya19LH5lPYzK51dcAH0utODt7jtOPeUPiUmwJPeSBewlXSfaB3fhILZ2bsFnrTx/w/OMOpaJuuJ7ANgGKohCEgIRE0Cf7TmPWIHG5A8EQOqEQNgHzHAInICm4FlXkgTiz9SWJGMX/AJyW4M+qyY6NH1dqnnmjvdA+01yE3TE3MSaU8+ZlFBQG2P3uLOqrpKj0ng95GqjcbsNOkG95RHeUORvUkX4lDapVNsjA7HY+0lVDPV1BmJW2IlooUDkMfPiRAXAtV3FeZnZUgN2mqkoTjBbc70OYihtq3XvARYsTpHI23muPK2um\"}}"
+```
+
+[View Example Motion Detection Event](Img/age.png)
+
